@@ -1,165 +1,120 @@
 # Everything Search Agent Skill
 
-Give Claude Code, Codex, and other Agent Skills-compatible coding agents instant, structured access to the local [voidtools Everything](https://www.voidtools.com/) index on Windows.
+Fast Windows file search for Claude Code, Codex, and other Agent Skills-compatible coding agents, powered by the local [voidtools Everything](https://www.voidtools.com/) index.
 
-The skill detects Everything before use, queries its local index through the official SDK DLL, falls back to the official `es.exe` CLI, and returns JSON containing paths and metadata. It does not bundle Everything binaries, expose a network service, or mutate search results.
+This skill detects Everything automatically, queries it through the official SDK DLL or `es.exe`, and returns structured, Unicode-safe JSON. Searches stay local and read-only.
 
-## What agents can do
+## Install with an agent
 
-- Detect full and portable Everything installations, running processes, SDK DLLs, and `es.exe`.
-- Search by filename, directory, extension, size, dates, attributes, regex, or indexed content.
-- Receive Unicode-safe JSON with full paths, file/folder type, size, modification time, attributes, and truncation state.
-- Use the architecture-matched Everything SDK DLL on x86, x64, ARM, or ARM64 without rewriting P/Invoke code.
-- Install the official SDK or CLI into a user-local directory after explicit approval.
-
-## Requirements
-
-- Windows 10 or 11
-- The full Everything application installed and running
-- Windows PowerShell 5.1 or PowerShell 7+
-- For structured queries: the official Everything SDK DLL (preferred) or `es.exe`
-
-Everything itself and its SDK/CLI remain subject to voidtools' terms. This repository contains only original integration scripts and instructions.
-
-## Give this repository to an agent
-
-Use this prompt with the private or public Git URL:
+Give your agent this repository URL:
 
 ```text
-Install the `everything-search` Agent Skill from https://github.com/ravegoth/everything-agent-skill.git. Read README.md and
-AGENTS.md first. Copy only `skills/everything-search` into your user skill
-directory for this agent host, preserve its relative files, validate SKILL.md,
-then run detect_everything.ps1. Do not download or install Everything, its SDK,
-or ES without asking me first. Report the detected backend and run a harmless
-test query limited to 10 results.
+Install the everything-search skill from https://github.com/ravegoth/everything-agent-skill.git.
+Read README.md and AGENTS.md, install skills/everything-search in my user skill
+directory, preserve its scripts and references, validate SKILL.md, then run the
+detection script. Ask before downloading Everything, its SDK, or es.exe. Finish
+with a harmless search limited to 10 results and report the selected backend.
 ```
 
-The repository follows the open Agent Skills structure (`SKILL.md` plus optional `scripts`, `references`, and `agents`). Host-specific installation paths are below.
+The repository uses the open Agent Skills layout, so Git-based skill installers can discover `skills/everything-search/SKILL.md` directly.
 
-## Install for Codex
+## Manual install
 
-Codex discovers personal skills under `$HOME/.agents/skills`.
+### Codex
 
 ```powershell
-$repo = Join-Path $env:TEMP 'everything-agent-skill'
-git clone https://github.com/ravegoth/everything-agent-skill.git $repo
+git clone https://github.com/ravegoth/everything-agent-skill.git "$env:TEMP\everything-agent-skill"
 New-Item -ItemType Directory -Force "$HOME\.agents\skills" | Out-Null
-Copy-Item "$repo\skills\everything-search" "$HOME\.agents\skills\everything-search" -Recurse -Force
+Copy-Item "$env:TEMP\everything-agent-skill\skills\everything-search" "$HOME\.agents\skills\everything-search" -Recurse -Force
 ```
 
-Open Codex and invoke it explicitly with `$everything-search`, or ask naturally to find a local Windows file.
+Invoke with `$everything-search` or ask Codex to find a local file.
 
-## Install for Claude Code
-
-Claude Code discovers personal skills under `$HOME/.claude/skills`.
+### Claude Code
 
 ```powershell
-$repo = Join-Path $env:TEMP 'everything-agent-skill'
-git clone https://github.com/ravegoth/everything-agent-skill.git $repo
+git clone https://github.com/ravegoth/everything-agent-skill.git "$env:TEMP\everything-agent-skill"
 New-Item -ItemType Directory -Force "$HOME\.claude\skills" | Out-Null
-Copy-Item "$repo\skills\everything-search" "$HOME\.claude\skills\everything-search" -Recurse -Force
+Copy-Item "$env:TEMP\everything-agent-skill\skills\everything-search" "$HOME\.claude\skills\everything-search" -Recurse -Force
 ```
 
-Invoke it with `/everything-search` or let Claude select it from the description.
-
-### Claude Code marketplace installation
-
-This repository is also a Claude Code plugin marketplace:
+Or install it as a Claude Code plugin:
 
 ```text
 /plugin marketplace add ravegoth/everything-agent-skill
 /plugin install everything-search@everything-agent-skills
 ```
 
-For a private repository, Claude Code uses your existing Git credentials. GitHub shorthand prefers SSH; set `CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1` if your credentials are configured for HTTPS.
+Private repositories use your existing GitHub credentials. Set `CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1` when your credentials are configured for HTTPS instead of SSH.
 
-## Other Agent Skills hosts
+### Other agents
 
-Copy the complete `skills/everything-search` directory into the host's user or project skills directory. Do not copy only `SKILL.md`: the scripts and references are required. A host that implements the open Agent Skills standard can read the manifest even if it ignores the optional OpenAI or Claude metadata.
+Copy the complete `skills/everything-search` directory into the host's user or project skills directory. Keep `scripts`, `references`, and `agents` beside `SKILL.md`.
 
-There is no honest universal install command because hosts choose different skill directories. The package itself is portable; only its destination changes.
+## Requirements
 
-## First run
+- Windows 10 or 11
+- Full Everything application installed and running in the same user session
+- Windows PowerShell 5.1 or PowerShell 7+
+- Official Everything SDK DLL (preferred) or `es.exe`
 
-Detection is read-only:
+No Everything binaries are included in this repository.
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\skills\everything-search\scripts\detect_everything.ps1" -Pretty
-```
+## Use
 
-Expected shape:
-
-```json
-{
-  "platform": { "windows": true, "process_bitness": 64 },
-  "everything": { "installed": true, "running": true },
-  "backend": { "ready": true, "preferred": "dll" },
-  "message": "Everything is ready through the dll backend."
-}
-```
-
-Search:
+Detect the Everything installation and available backend:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\skills\everything-search\scripts\search_everything.ps1" `
+.\skills\everything-search\scripts\detect_everything.ps1 -Pretty
+```
+
+Search the local index:
+
+```powershell
+.\skills\everything-search\scripts\search_everything.ps1 `
   -Query 'file: path:"D:\Music\" ext:wav;flac size:>100mb' `
-  -MaxResults 50 `
-  -Pretty
+  -MaxResults 50 -Pretty
 ```
 
-## Backend setup
+Results include the full path, item type, size, modification time, attributes, and truncation metadata.
 
-The skill never downloads a backend during detection. After reviewing the destination, install the official SDK with:
+If no query backend is detected, preview and install the official SDK after approval:
 
 ```powershell
 .\skills\everything-search\scripts\setup_backend.ps1 -Component Sdk -WhatIf
 .\skills\everything-search\scripts\setup_backend.ps1 -Component Sdk -Confirm
 ```
 
-The SDK goes to `%LOCALAPPDATA%\EverythingAgent\SDK`; the repository stays binary-free. Use `-Component Es` for the CLI fallback.
+The setup script downloads only from `voidtools.com` into `%LOCALAPPDATA%\EverythingAgent`. Use `-Component Es` for the CLI fallback.
 
-## Design
+## Features
 
-```text
-agent request
-  -> SKILL.md workflow
-  -> detect_everything.ps1
-  -> search_everything.ps1
-      -> Everything SDK DLL -> local Everything IPC/index
-      -> es.exe fallback    -> local Everything IPC/index
-  -> JSON results
-```
+- Detects installed, portable, and running Everything instances
+- Searches by name, path, extension, size, date, attributes, regex, or indexed content
+- Supports x86, x64, ARM, and ARM64 SDK DLLs
+- Returns stable JSON for further agent actions
+- Uses local Everything IPC; no HTTP or ETP server
+- Never opens, moves, deletes, uploads, or executes search results
 
-The SDK DLL is a client library, not the index. Everything must be running in the same interactive Windows session.
-
-## Validation
+## Validate
 
 ```powershell
 python .\tests\validate_repo.py
 Get-ChildItem . -Filter '*.ps1' -Recurse | ForEach-Object {
-    [void][scriptblock]::Create((Get-Content $_.FullName -Raw))
+  [void][scriptblock]::Create((Get-Content $_.FullName -Raw))
 }
 ```
 
-CI performs manifest/repository checks on Linux and parses every PowerShell script on Windows.
+GitHub Actions validates the repository on Linux and parses every PowerShell script on Windows.
 
-## Security model
-
-- Local IPC only; no HTTP or ETP server is enabled.
-- Search is read-only. Opening, moving, deleting, uploading, or executing results requires a separate user request.
-- No `Invoke-Expression` and no command-string interpolation of user queries.
-- No third-party DLL or executable is committed.
-- Setup downloads only from `https://www.voidtools.com/` and supports `-WhatIf`/`-Confirm`.
-
-## Upstream documentation
+## Documentation
 
 - [Everything downloads](https://www.voidtools.com/downloads/)
 - [Everything SDK](https://www.voidtools.com/support/everything/sdk/)
-- [Everything IPC](https://www.voidtools.com/support/everything/sdk/ipc/)
-- [Search syntax](https://www.voidtools.com/support/everything/searching/)
+- [Everything search syntax](https://www.voidtools.com/support/everything/searching/)
 - [Claude Code skills](https://code.claude.com/docs/en/skills)
 - [OpenAI Codex skills](https://learn.chatgpt.com/docs/build-skills)
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+[MIT](LICENSE)
