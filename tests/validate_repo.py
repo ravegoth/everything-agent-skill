@@ -21,6 +21,8 @@ def main() -> None:
         ROOT / "LICENSE",
         ROOT / ".claude-plugin" / "plugin.json",
         ROOT / ".claude-plugin" / "marketplace.json",
+        ROOT / ".codex-plugin" / "plugin.json",
+        ROOT / ".agents" / "plugins" / "marketplace.json",
         SKILL / "SKILL.md",
         SKILL / "agents" / "openai.yaml",
         SKILL / "scripts" / "detect_everything.ps1",
@@ -48,10 +50,18 @@ def main() -> None:
 
     plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
     marketplace = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+    codex_plugin = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    codex_marketplace = json.loads((ROOT / ".agents" / "plugins" / "marketplace.json").read_text(encoding="utf-8"))
     if plugin["name"] != "everything-search":
         raise AssertionError("Claude plugin name does not match skill")
     if marketplace["plugins"][0]["name"] != plugin["name"]:
         raise AssertionError("Marketplace plugin name does not match plugin manifest")
+    if codex_plugin["name"] != plugin["name"]:
+        raise AssertionError("Codex and Claude plugin names do not match")
+    if codex_plugin["skills"] != "./skills/":
+        raise AssertionError("Codex plugin must include the skills directory")
+    if codex_marketplace["plugins"][0]["name"] != codex_plugin["name"]:
+        raise AssertionError("Codex marketplace plugin name does not match its manifest")
 
     powershell = "\n".join(path.read_text(encoding="utf-8") for path in (SKILL / "scripts").glob("*.ps1"))
     if "Invoke-Expression" in powershell:

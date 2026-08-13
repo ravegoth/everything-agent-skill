@@ -1,0 +1,26 @@
+{
+  "name": "everything-search",
+  "version": "0.1.0",
+  "description": "Search local Windows files instantly through voidtools Everything.",
+  "author": {
+    "name": "ravegoth",
+    "url": "https://github.com/ravegoth"
+  },
+  "homepage": "https://github.com/ravegoth/everything-agent-skill",
+  "repository": "https://github.com/ravegoth/everything-agent-skill",
+  "license": "MIT",
+  "keywords": ["everything", "windows", "file-search", "agent-skill"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Everything Search",
+    "shortDescription": "Instant local Windows file search",
+    "longDescription": "Find local Windows files and folders through the voidtools Everything index with structured JSON results.",
+    "developerName": "ravegoth",
+    "category": "Productivity",
+    "capabilities": ["Read"],
+    "websiteURL": "https://github.com/ravegoth/everything-agent-skill",
+    "defaultPrompt": [
+      "Use Everything Search to find files on this Windows computer."
+    ]
+  }
+}

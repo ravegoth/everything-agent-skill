@@ -1,5 +1,6 @@
 {
   "name": "everything-agent-skills",
+  "description": "Windows file search skills powered by voidtools Everything.",
   "owner": {
     "name": "ravegoth"
   },

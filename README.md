@@ -4,9 +4,21 @@ Fast Windows file search for Claude Code, Codex, and other Agent Skills-compatib
 
 This skill detects Everything automatically, queries it through the official SDK DLL or `es.exe`, and returns structured, Unicode-safe JSON. Searches stay local and read-only.
 
-## Install with an agent
+## Install
 
-Give your agent this repository URL:
+One command installs the skill interactively for Codex, Claude Code, Cursor, OpenCode, and other supported agents:
+
+```powershell
+npx skills add ravegoth/everything-agent-skill -g
+```
+
+Install globally for every detected agent without prompts:
+
+```powershell
+npx skills add ravegoth/everything-agent-skill -g --all
+```
+
+Or give your agent the repository directly:
 
 ```text
 Install the everything-search skill from https://github.com/ravegoth/everything-agent-skill.git.
@@ -18,14 +30,12 @@ with a harmless search limited to 10 results and report the selected backend.
 
 The repository uses the open Agent Skills layout, so Git-based skill installers can discover `skills/everything-search/SKILL.md` directly.
 
-## Manual install
+## Agent-specific install
 
 ### Codex
 
 ```powershell
-git clone https://github.com/ravegoth/everything-agent-skill.git "$env:TEMP\everything-agent-skill"
-New-Item -ItemType Directory -Force "$HOME\.agents\skills" | Out-Null
-Copy-Item "$env:TEMP\everything-agent-skill\skills\everything-search" "$HOME\.agents\skills\everything-search" -Recurse -Force
+npx skills add ravegoth/everything-agent-skill -g -a codex -y
 ```
 
 Invoke with `$everything-search` or ask Codex to find a local file.
@@ -33,9 +43,7 @@ Invoke with `$everything-search` or ask Codex to find a local file.
 ### Claude Code
 
 ```powershell
-git clone https://github.com/ravegoth/everything-agent-skill.git "$env:TEMP\everything-agent-skill"
-New-Item -ItemType Directory -Force "$HOME\.claude\skills" | Out-Null
-Copy-Item "$env:TEMP\everything-agent-skill\skills\everything-search" "$HOME\.claude\skills\everything-search" -Recurse -Force
+npx skills add ravegoth/everything-agent-skill -g -a claude-code -y
 ```
 
 Or install it as a Claude Code plugin:
@@ -46,6 +54,14 @@ Or install it as a Claude Code plugin:
 ```
 
 Private repositories use your existing GitHub credentials. Set `CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1` when your credentials are configured for HTTPS instead of SSH.
+
+### Codex plugin marketplace
+
+```text
+codex plugin marketplace add ravegoth/everything-agent-skill
+```
+
+Then open `/plugins`, select **Everything Agent Skills**, and install **Everything Search**.
 
 ### Other agents
 
