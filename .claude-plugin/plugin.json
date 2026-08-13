@@ -1,0 +1,12 @@
+{
+  "name": "everything-search",
+  "description": "Find local Windows files instantly through voidtools Everything with structured JSON results.",
+  "version": "0.1.0",
+  "author": {
+    "name": "ravegoth"
+  },
+  "homepage": "https://github.com/ravegoth/everything-agent-skill",
+  "repository": "https://github.com/ravegoth/everything-agent-skill",
+  "license": "MIT",
+  "keywords": ["everything", "windows", "search", "files", "agent-skill"]
+}

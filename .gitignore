@@ -1,0 +1,6 @@
+*.zip
+*.dll
+*.exe
+*.msi
+__pycache__/
+.pytest_cache/

@@ -1,0 +1,16 @@
+{
+  "name": "everything-agent-skills",
+  "owner": {
+    "name": "ravegoth"
+  },
+  "plugins": [
+    {
+      "name": "everything-search",
+      "source": "./",
+      "description": "Find local Windows files instantly through voidtools Everything.",
+      "version": "0.1.0",
+      "category": "development",
+      "keywords": ["everything", "windows", "search", "files"]
+    }
+  ]
+}

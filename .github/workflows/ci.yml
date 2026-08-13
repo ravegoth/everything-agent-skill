@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  repository:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python tests/validate_repo.py
+
+  powershell:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse scripts
+        shell: pwsh
+        run: |
+          Get-ChildItem . -Filter '*.ps1' -Recurse | ForEach-Object {
+            [void][scriptblock]::Create((Get-Content $_.FullName -Raw))
+          }
+      - name: Test detection contract
+        shell: pwsh
+        run: |
+          $json = & ./skills/everything-search/scripts/detect_everything.ps1
+          $status = $json | ConvertFrom-Json
+          if (-not $status.platform.windows) { throw 'Expected Windows detection result.' }
+          if ($null -eq $status.everything.installed) { throw 'Missing installed flag.' }
+          if ($null -eq $status.backend.ready) { throw 'Missing backend ready flag.' }
+      - name: Test setup dry run
+        shell: pwsh
+        run: ./skills/everything-search/scripts/setup_backend.ps1 -Component Sdk -WhatIf

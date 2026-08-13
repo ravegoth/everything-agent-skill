@@ -1,0 +1,4 @@
+interface:
+  display_name: "Everything Search"
+  short_description: "Find Windows files instantly with Everything"
+  default_prompt: "Use $everything-search to find files on this Windows computer with Everything."
