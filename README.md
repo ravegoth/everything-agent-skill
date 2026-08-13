@@ -2,7 +2,7 @@
 
 Give Claude Code, Codex, and other Agent Skills-compatible coding agents instant, structured access to the local [voidtools Everything](https://www.voidtools.com/) index on Windows.
 
-The skill detects Everything before use, prefers the official SDK DLL over local IPC, falls back to the official `es.exe` CLI, and returns JSON containing paths and metadata. It does not bundle Everything binaries, expose a network service, or mutate search results.
+The skill detects Everything before use, queries its local index through the official SDK DLL, falls back to the official `es.exe` CLI, and returns JSON containing paths and metadata. It does not bundle Everything binaries, expose a network service, or mutate search results.
 
 ## What agents can do
 
@@ -26,7 +26,7 @@ Everything itself and its SDK/CLI remain subject to voidtools' terms. This repos
 Use this prompt with the private or public Git URL:
 
 ```text
-Install the `everything-search` Agent Skill from <GIT_URL>. Read README.md and
+Install the `everything-search` Agent Skill from https://github.com/ravegoth/everything-agent-skill.git. Read README.md and
 AGENTS.md first. Copy only `skills/everything-search` into your user skill
 directory for this agent host, preserve its relative files, validate SKILL.md,
 then run detect_everything.ps1. Do not download or install Everything, its SDK,
@@ -42,7 +42,7 @@ Codex discovers personal skills under `$HOME/.agents/skills`.
 
 ```powershell
 $repo = Join-Path $env:TEMP 'everything-agent-skill'
-git clone <GIT_URL> $repo
+git clone https://github.com/ravegoth/everything-agent-skill.git $repo
 New-Item -ItemType Directory -Force "$HOME\.agents\skills" | Out-Null
 Copy-Item "$repo\skills\everything-search" "$HOME\.agents\skills\everything-search" -Recurse -Force
 ```
@@ -55,7 +55,7 @@ Claude Code discovers personal skills under `$HOME/.claude/skills`.
 
 ```powershell
 $repo = Join-Path $env:TEMP 'everything-agent-skill'
-git clone <GIT_URL> $repo
+git clone https://github.com/ravegoth/everything-agent-skill.git $repo
 New-Item -ItemType Directory -Force "$HOME\.claude\skills" | Out-Null
 Copy-Item "$repo\skills\everything-search" "$HOME\.claude\skills\everything-search" -Recurse -Force
 ```

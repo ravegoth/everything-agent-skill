@@ -4,7 +4,7 @@ Everything must be installed and running in the same Windows user session as the
 
 The skill does not bundle third-party binaries. It detects two official query backends:
 
-- Everything SDK: `Everything64.dll` or `Everything32.dll`
+- Everything SDK: the architecture-matched `Everything64.dll`, `Everything32.dll`, `EverythingARM64.dll`, or `EverythingARM.dll`
 - Everything CLI: `es.exe`
 
 ## Preferred SDK setup

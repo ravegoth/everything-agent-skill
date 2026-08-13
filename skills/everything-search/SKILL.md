@@ -35,7 +35,7 @@ Use the bundled PowerShell scripts as the stable interface to Everything. Keep s
 
 Prefer backends in this order:
 
-1. `Everything64.dll` or `Everything32.dll` from the official Everything SDK.
+1. The architecture-matched official SDK DLL: `Everything64.dll`, `Everything32.dll`, `EverythingARM64.dll`, or `EverythingARM.dll`.
 2. `es.exe` from the official Everything command-line interface.
 
 The wrapper selects automatically. Use `-Backend Dll` only when DLL behavior must be tested, or `-Backend Es` when diagnosing the CLI fallback.
