@@ -53,8 +53,6 @@ Or install it as a Claude Code plugin:
 /plugin install everything-search@everything-agent-skills
 ```
 
-Private repositories use your existing GitHub credentials. Set `CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1` when your credentials are configured for HTTPS instead of SSH.
-
 ### Codex plugin marketplace
 
 ```text
