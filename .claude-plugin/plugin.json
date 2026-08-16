@@ -1,7 +1,7 @@
 {
   "name": "everything-search",
   "description": "Find local Windows files instantly through voidtools Everything with structured JSON results.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "ravegoth"
   },

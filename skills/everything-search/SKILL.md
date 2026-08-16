@@ -31,6 +31,25 @@ Use the bundled PowerShell scripts as the stable interface to Everything. Keep s
 
 7. Parse stdout as JSON. Treat stderr or a nonzero exit code as failure. Report the exact query and whether results were truncated.
 
+## Result contract
+
+`search_everything.ps1` writes one JSON object to stdout:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `backend` | `"dll"` or `"es"` | Backend that answered the query |
+| `query` | string | Query exactly as sent to Everything |
+| `max_results` | number | Requested limit |
+| `result_count` | number | Results returned, never above `max_results` |
+| `total_results` | number or `null` | Total matches; `null` on the ES backend, which cannot report it |
+| `truncated` | boolean | Whether matches exist beyond `max_results` |
+| `truncation_known` | boolean | Whether `truncated` is authoritative |
+| `results` | array | `path`, `name`, `kind`, `size`, `modified_utc`, `attributes`, `exists` |
+
+A result count equal to `max_results` does not by itself mean the results were truncated; read `truncated`. Absent values are JSON `null`. `size` is `null` for folders, and `modified_utc` is ISO 8601 UTC.
+
+On failure the script writes a message to stderr and exits nonzero without printing partial JSON.
+
 ## Backend selection
 
 Prefer backends in this order:

@@ -15,26 +15,138 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python tests/validate_repo.py
-
-  powershell:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Parse scripts
+      - name: Validate repository structure, manifests, and privacy rules
+        run: python tests/validate_repo.py
+      - name: Parse scripts with PowerShell 7
         shell: pwsh
         run: |
           Get-ChildItem . -Filter '*.ps1' -Recurse | ForEach-Object {
             [void][scriptblock]::Create((Get-Content $_.FullName -Raw))
           }
-      - name: Test detection contract
+      - name: Detection reports non-Windows honestly
         shell: pwsh
+        run: |
+          $json = & ./skills/everything-search/scripts/detect_everything.ps1
+          if ($LASTEXITCODE -ne 2) { throw "Expected exit code 2 off Windows, got $LASTEXITCODE." }
+          $status = $json | ConvertFrom-Json
+          if ($status.platform.windows) { throw 'Expected platform.windows to be false.' }
+          if ($status.backend.ready) { throw 'Expected backend.ready to be false.' }
+
+  powershell:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse scripts with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          Get-ChildItem . -Filter '*.ps1' -Recurse | ForEach-Object {
+            [void][scriptblock]::Create((Get-Content $_.FullName -Raw))
+          }
+
+      - name: Parse scripts with PowerShell 7
+        shell: pwsh
+        run: |
+          Get-ChildItem . -Filter '*.ps1' -Recurse | ForEach-Object {
+            [void][scriptblock]::Create((Get-Content $_.FullName -Raw))
+          }
+
+      # Everything is not installed on hosted runners, so these assert the
+      # contract that must hold when no backend is present.
+      - name: Test detection contract
+        shell: powershell
         run: |
           $json = & ./skills/everything-search/scripts/detect_everything.ps1
           $status = $json | ConvertFrom-Json
           if (-not $status.platform.windows) { throw 'Expected Windows detection result.' }
           if ($null -eq $status.everything.installed) { throw 'Missing installed flag.' }
           if ($null -eq $status.backend.ready) { throw 'Missing backend ready flag.' }
+          if ($status.everything.installed -isnot [bool]) { throw 'installed must be a boolean.' }
+          if ($status.backend.ready -isnot [bool]) { throw 'backend.ready must be a boolean.' }
+
+      # Regression: absent paths must serialize as JSON null, never as {}.
+      # Select-Object -First 1 over an empty pipeline yields AutomationNull,
+      # which ConvertTo-Json renders as an empty object.
+      - name: Absent paths serialize as null
+        shell: powershell
+        run: |
+          $status = & ./skills/everything-search/scripts/detect_everything.ps1 | ConvertFrom-Json
+          foreach ($name in 'dll', 'es') {
+            $value = $status.backend.$name
+            if ($null -ne $value -and $value -isnot [string]) {
+              throw "backend.$name must be null or a string path, got $($value.GetType().Name)."
+            }
+          }
+          $exe = $status.everything.executable
+          if ($null -ne $exe -and $exe -isnot [string]) {
+            throw "everything.executable must be null or a string path, got $($exe.GetType().Name)."
+          }
+
+      # Invoked out of process because the script reports failures on the real
+      # stderr handle, which an in-process redirect does not capture.
+      - name: Search fails honestly with no backend
+        shell: powershell
+        run: |
+          $script = (Resolve-Path ./skills/everything-search/scripts/search_everything.ps1).Path
+          $outFile = Join-Path $env:RUNNER_TEMP 'search-stdout.txt'
+          $errorFile = Join-Path $env:RUNNER_TEMP 'search-stderr.txt'
+          $process = Start-Process -FilePath 'powershell.exe' -Wait -PassThru -NoNewWindow `
+            -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$script`"", '-Query', 'ext:ps1') `
+            -RedirectStandardOutput $outFile -RedirectStandardError $errorFile
+          if ($process.ExitCode -eq 0) { throw 'Expected a nonzero exit code without a backend.' }
+          if ((Get-Content -LiteralPath $outFile -Raw)) { throw 'No partial JSON may be written to stdout on failure.' }
+          if (-not (Get-Content -LiteralPath $errorFile -Raw)) { throw 'Expected an explanatory message on stderr.' }
+
+      # Regression: es.exe reads one space-containing argument as a single
+      # literal phrase, so query terms must be split while quotes are kept.
+      - name: Query tokenizer splits terms and preserves quoted phrases
+        shell: powershell
+        run: |
+          $path = (Resolve-Path ./skills/everything-search/scripts/search_everything.ps1).Path
+          $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$null)
+          $function = $ast.FindAll({
+            $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $args[0].Name -eq 'Split-EsQueryTerm'
+          }, $true)
+          if (-not $function) { throw 'Split-EsQueryTerm was not found.' }
+          . ([scriptblock]::Create($function[0].Extent.Text))
+
+          $cases = @(
+            @{ Query = 'ext:ps1 dm:today';                Expected = @('ext:ps1', 'dm:today') }
+            @{ Query = 'path:"C:\Program Files" ext:txt'; Expected = @('path:"C:\Program Files"', 'ext:txt') }
+            @{ Query = '"exact phrase"';                  Expected = @('"exact phrase"') }
+            @{ Query = '  spaced   out  ';                Expected = @('spaced', 'out') }
+            @{ Query = 'single';                          Expected = @('single') }
+          )
+          foreach ($case in $cases) {
+            $actual = @(Split-EsQueryTerm -Text $case.Query)
+            if ($actual.Count -ne $case.Expected.Count -or (Compare-Object $actual $case.Expected -SyncWindow 0)) {
+              throw "Tokenizing '$($case.Query)' produced [$($actual -join '|')]."
+            }
+          }
+
       - name: Test setup dry run
-        shell: pwsh
-        run: ./skills/everything-search/scripts/setup_backend.ps1 -Component Sdk -WhatIf
+        shell: powershell
+        run: |
+          ./skills/everything-search/scripts/setup_backend.ps1 -Component Sdk -WhatIf
+          ./skills/everything-search/scripts/setup_backend.ps1 -Component Es -WhatIf
+
+      - name: Scripts run from a path containing spaces
+        shell: powershell
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'path with spaces\everything skill'
+          New-Item -ItemType Directory -Path $target -Force | Out-Null
+          Copy-Item -Path './skills' -Destination $target -Recurse -Force
+          $script = Join-Path $target 'skills\everything-search\scripts\detect_everything.ps1'
+          $status = & $script | ConvertFrom-Json
+          if (-not $status.platform.windows) { throw 'Detection failed from a path containing spaces.' }
+
+  skills-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Skill is discoverable by the Skills CLI
+        run: npx --yes skills@latest add . --list

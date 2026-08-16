@@ -50,28 +50,82 @@ function Get-PathMetadata {
     }
 }
 
+# es.exe treats one argument containing spaces as a single literal phrase, so a
+# whole query passed as one argument matches nothing. Split it into terms on
+# unquoted whitespace and keep the quotes, which es.exe needs to see for phrases.
+function Split-EsQueryTerm {
+    param([string]$Text)
+
+    $terms = [System.Collections.Generic.List[string]]::new()
+    $current = [Text.StringBuilder]::new()
+    $inQuotes = $false
+
+    foreach ($character in $Text.ToCharArray()) {
+        if ($character -eq '"') {
+            $inQuotes = -not $inQuotes
+            [void]$current.Append($character)
+            continue
+        }
+        if (-not $inQuotes -and [char]::IsWhiteSpace($character)) {
+            if ($current.Length -gt 0) {
+                [void]$terms.Add($current.ToString())
+                [void]$current.Clear()
+            }
+            continue
+        }
+        [void]$current.Append($character)
+    }
+    if ($current.Length -gt 0) { [void]$terms.Add($current.ToString()) }
+
+    return $terms
+}
+
 function Invoke-EsSearch {
     param([string]$Executable, [string]$SearchText, [int]$Limit)
 
-    $lines = @(& $Executable -n $Limit $SearchText 2>&1)
-    if ($LASTEXITCODE -ne 0) {
-        throw "es.exe failed with exit code $LASTEXITCODE`: $($lines -join [Environment]::NewLine)"
+    $terms = Split-EsQueryTerm -Text $SearchText
+    if ($terms.Count -eq 0) { throw 'The query contains no search terms.' }
+
+    # Ask for one more result than requested so an exact-limit result set is not
+    # misreported as truncated.
+    $probe = if ($Limit -lt [int]::MaxValue) { $Limit + 1 } else { $Limit }
+
+    # es.exe emits UTF-8 only when the console output code page is 65001.
+    $previousEncoding = $null
+    try { $previousEncoding = [Console]::OutputEncoding; [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch { }
+
+    # A native command writing to stderr raises NativeCommandError while
+    # ErrorActionPreference is 'Stop', even when it exits successfully.
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $esArguments = @('-n', $probe) + $terms
+        $lines = @(& $Executable @esArguments 2>$null)
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+        if ($previousEncoding) { try { [Console]::OutputEncoding = $previousEncoding } catch { } }
     }
 
-    $items = foreach ($line in $lines) {
-        $path = [string]$line
-        if (-not [string]::IsNullOrWhiteSpace($path)) { Get-PathMetadata -Path $path }
+    if ($exitCode -ne 0) {
+        throw "es.exe exited with code $exitCode. Confirm Everything is running in the same interactive user session as this shell, then retry. Run detect_everything.ps1 -Pretty to re-check the backend."
     }
+
+    $paths = @($lines | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    $truncated = $paths.Count -gt $Limit
+    if ($truncated) { $paths = @($paths | Select-Object -First $Limit) }
+
+    $items = @(foreach ($path in $paths) { Get-PathMetadata -Path $path })
 
     return [ordered]@{
         backend = 'es'
         query = $SearchText
         max_results = $Limit
-        result_count = @($items).Count
+        result_count = $items.Count
         total_results = $null
-        truncated = $null
-        truncation_known = $false
-        results = @($items)
+        truncated = $truncated
+        truncation_known = $true
+        results = $items
     }
 }
 
@@ -152,6 +206,7 @@ public static class EverythingSdk {
         $hasSize = [EverythingSdk]::Everything_GetResultSize([UInt32]$i, [ref]$size)
         $hasModified = [EverythingSdk]::Everything_GetResultDateModified([UInt32]$i, [ref]$modified)
         $attributesValue = [EverythingSdk]::Everything_GetResultAttributes([UInt32]$i)
+        $attributes = if ($attributesValue -eq 0 -or $attributesValue -eq 0xFFFFFFFF) { $null } else { ([IO.FileAttributes][int]$attributesValue).ToString() }
         $kind = if ([EverythingSdk]::Everything_IsFolderResult([UInt32]$i)) { 'folder' } elseif ([EverythingSdk]::Everything_IsFileResult([UInt32]$i)) { 'file' } else { 'unknown' }
         $path = $buffer.ToString()
 
@@ -161,7 +216,7 @@ public static class EverythingSdk {
             kind = $kind
             size = if ($hasSize -and $kind -eq 'file') { $size } else { $null }
             modified_utc = if ($hasModified) { Convert-FileTimeUtc $modified } else { $null }
-            attributes = ([IO.FileAttributes]$attributesValue).ToString()
+            attributes = $attributes
             exists = Test-Path -LiteralPath $path
         })
     }
@@ -192,13 +247,23 @@ try {
     } else { $Backend }
 
     if (-not $selectedBackend) {
-        throw 'No query backend was detected. Install the official Everything SDK DLL or es.exe.'
+        throw 'No query backend was detected. Install the official Everything SDK DLL or es.exe, for example with setup_backend.ps1 -Component Sdk.'
     }
-    if ($selectedBackend -eq 'Dll' -and -not (Test-Path -LiteralPath $DllPath -PathType Leaf)) {
-        throw "Everything SDK DLL not found: $DllPath"
+    if ($selectedBackend -eq 'Dll') {
+        if ([string]::IsNullOrWhiteSpace($DllPath)) {
+            throw 'Backend Dll was requested, but no Everything SDK DLL was detected. Pass -DllPath, run setup_backend.ps1 -Component Sdk, or use -Backend Auto.'
+        }
+        if (-not (Test-Path -LiteralPath $DllPath -PathType Leaf)) {
+            throw "Everything SDK DLL not found: $DllPath"
+        }
     }
-    if ($selectedBackend -eq 'Es' -and -not (Test-Path -LiteralPath $EsPath -PathType Leaf)) {
-        throw "Everything CLI not found: $EsPath"
+    if ($selectedBackend -eq 'Es') {
+        if ([string]::IsNullOrWhiteSpace($EsPath)) {
+            throw 'Backend Es was requested, but es.exe was not detected. Pass -EsPath, run setup_backend.ps1 -Component Es, or use -Backend Auto.'
+        }
+        if (-not (Test-Path -LiteralPath $EsPath -PathType Leaf)) {
+            throw "Everything CLI not found: $EsPath"
+        }
     }
 
     $payload = if ($selectedBackend -eq 'Dll') {

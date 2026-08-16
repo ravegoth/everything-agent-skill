@@ -1,6 +1,40 @@
+# Downloaded backends and archives (never commit third-party binaries)
 *.zip
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+*.gz
 *.dll
 *.exe
 *.msi
+EverythingAgent/
+
+# Everything databases and index exports
+*.db
+*.efu
+
+# Logs, dumps, and test output
+*.log
+*.dmp
+*.png
+test-output/
+tmp/
+
+# Local configuration and credentials
+.env
+.env.*
+*.pem
+*.key
+
+# Tooling caches
 __pycache__/
 .pytest_cache/
+node_modules/
+
+# Editor and OS clutter
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

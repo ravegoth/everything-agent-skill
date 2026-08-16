@@ -7,9 +7,8 @@
     {
       "name": "everything-search",
       "source": {
-        "source": "url",
-        "url": "https://github.com/ravegoth/everything-agent-skill.git",
-        "ref": "main"
+        "source": "local",
+        "path": "./"
       },
       "policy": {
         "installation": "AVAILABLE",

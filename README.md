@@ -119,7 +119,9 @@ Get-ChildItem . -Filter '*.ps1' -Recurse | ForEach-Object {
 }
 ```
 
-GitHub Actions validates the repository on Linux and parses every PowerShell script on Windows.
+`validate_repo.py` checks the repository layout, the skill and plugin manifests, and refuses to pass if a binary or anything resembling private machine data is committed.
+
+GitHub Actions runs on Linux and Windows and needs no Everything installation: it validates the repository, parses every script under both Windows PowerShell 5.1 and PowerShell 7, asserts the detection and failure contracts, exercises a path containing spaces, and confirms the skill is discoverable by the Skills CLI.
 
 ## Documentation
 
@@ -127,7 +129,9 @@ GitHub Actions validates the repository on Linux and parses every PowerShell scr
 - [Everything SDK](https://www.voidtools.com/support/everything/sdk/)
 - [Everything search syntax](https://www.voidtools.com/support/everything/searching/)
 - [Claude Code skills](https://code.claude.com/docs/en/skills)
+- [Claude Code plugin marketplaces](https://code.claude.com/docs/en/plugin-marketplaces)
 - [OpenAI Codex skills](https://learn.chatgpt.com/docs/build-skills)
+- [OpenAI Codex plugins](https://developers.openai.com/codex/plugins/build)
 
 ## License
 

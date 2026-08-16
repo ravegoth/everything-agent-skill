@@ -120,10 +120,10 @@ $expectedDll = @{
     Arm64 = 'EverythingARM64.dll'
     Arm = 'EverythingARM.dll'
 }[$processArchitecture]
-$dll = $dllCandidates | Where-Object { (Split-Path -Leaf $_) -eq $expectedDll } | Select-Object -First 1
+$dll = @($dllCandidates | Where-Object { (Split-Path -Leaf $_) -eq $expectedDll } | Select-Object -First 1)[0]
 
-$exe = $exeCandidates | Select-Object -First 1
-$es = $esCandidates | Select-Object -First 1
+$exe = @($exeCandidates | Select-Object -First 1)[0]
+$es = @($esCandidates | Select-Object -First 1)[0]
 $running = @(Get-Process -Name 'Everything', 'Everything64' -ErrorAction SilentlyContinue).Count -gt 0
 $preferred = if ($dll) { 'dll' } elseif ($es) { 'es' } else { $null }
 
