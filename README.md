@@ -133,6 +133,15 @@ GitHub Actions runs on Linux and Windows and needs no Everything installation: i
 - [OpenAI Codex skills](https://learn.chatgpt.com/docs/build-skills)
 - [OpenAI Codex plugins](https://developers.openai.com/codex/plugins/build)
 
+## Project
+
+- [Privacy](PRIVACY.md) — the skill collects nothing, but your coding agent's provider may process the paths it returns
+- [Terms](TERMS.md)
+- [Security policy](SECURITY.md)
+- [Report an issue](https://github.com/ravegoth/everything-agent-skill/issues)
+
 ## License
 
 [MIT](LICENSE)
+
+Unofficial and independent. Not affiliated with, endorsed by, or sponsored by voidtools. Everything is voidtools' software and is not included in this repository.
