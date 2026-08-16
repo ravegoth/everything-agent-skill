@@ -16,12 +16,45 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Emit UTF-8 no matter what code page the host console uses. A legacy console
+# code page transcodes non-ASCII characters in paths, and some of them become
+# raw control bytes that make the JSON unparseable: U+2022 is byte 0x07 in
+# CP437, for example. Written without a BOM so the output stays clean JSON.
+try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
+
 $detectScript = Join-Path $PSScriptRoot 'detect_everything.ps1'
 
 function Convert-FileTimeUtc {
     param([Int64]$Value)
     if ($Value -le 0) { return $null }
     try { return [DateTime]::FromFileTimeUtc($Value).ToString('o') } catch { return $null }
+}
+
+# Casting a raw attribute mask to [IO.FileAttributes] throws whenever it carries
+# a bit the running .NET does not define, such as the cloud placeholder flag
+# 0x400000 that OneDrive sets. Decode bit by bit instead and keep any unknown
+# remainder as hex so a search never fails on an unfamiliar attribute.
+function Convert-FileAttribute {
+    param([UInt32]$Value)
+
+    # 0xFFFFFFFF is INVALID_FILE_ATTRIBUTES. Written as [UInt32]::MaxValue
+    # because PowerShell parses the 0xFFFFFFFF literal as -1.
+    if ($Value -eq 0 -or $Value -eq [UInt32]::MaxValue) { return $null }
+
+    $names = [System.Collections.Generic.List[string]]::new()
+    $remaining = $Value
+    foreach ($name in [Enum]::GetNames([IO.FileAttributes])) {
+        $bit = [UInt32][IO.FileAttributes]::$name
+        if ($bit -ne 0 -and ($remaining -band $bit) -eq $bit) {
+            [void]$names.Add($name)
+            $remaining = $remaining -band (-bnot $bit)
+        }
+    }
+    if ($remaining -ne 0) { [void]$names.Add('0x{0:X}' -f $remaining) }
+    if ($names.Count -eq 0) { return $null }
+
+    return ($names -join ', ')
 }
 
 function Get-PathMetadata {
@@ -206,7 +239,7 @@ public static class EverythingSdk {
         $hasSize = [EverythingSdk]::Everything_GetResultSize([UInt32]$i, [ref]$size)
         $hasModified = [EverythingSdk]::Everything_GetResultDateModified([UInt32]$i, [ref]$modified)
         $attributesValue = [EverythingSdk]::Everything_GetResultAttributes([UInt32]$i)
-        $attributes = if ($attributesValue -eq 0 -or $attributesValue -eq 0xFFFFFFFF) { $null } else { ([IO.FileAttributes][int]$attributesValue).ToString() }
+        $attributes = Convert-FileAttribute -Value $attributesValue
         $kind = if ([EverythingSdk]::Everything_IsFolderResult([UInt32]$i)) { 'folder' } elseif ([EverythingSdk]::Everything_IsFileResult([UInt32]$i)) { 'file' } else { 'unknown' }
         $path = $buffer.ToString()
 

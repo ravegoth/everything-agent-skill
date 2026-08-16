@@ -6,6 +6,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Detected paths can contain non-ASCII characters, so emit UTF-8 regardless of
+# the host console code page. See search_everything.ps1 for the failure mode.
+try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
+
 function Add-CandidatePath {
     param(
         [System.Collections.Generic.List[string]]$List,
