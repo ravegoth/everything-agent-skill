@@ -81,6 +81,16 @@ def main() -> None:
     if not re.fullmatch(r"\d+\.\d+\.\d+", codex_plugin["version"]):
         raise AssertionError("Codex plugin.json version must be strict semver")
 
+    # Every manifest must agree, so a published version always identifies one
+    # exact set of files.
+    versions = {
+        ".claude-plugin/plugin.json": plugin["version"],
+        ".claude-plugin/marketplace.json": marketplace["plugins"][0]["version"],
+        ".codex-plugin/plugin.json": codex_plugin["version"],
+    }
+    if len(set(versions.values())) != 1:
+        raise AssertionError(f"Manifest versions disagree: {versions}")
+
     codex_entry = codex_marketplace["plugins"][0]
     policy = codex_entry.get("policy", {})
     if policy.get("installation") not in {"NOT_AVAILABLE", "AVAILABLE", "INSTALLED_BY_DEFAULT"}:
