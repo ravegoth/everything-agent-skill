@@ -177,10 +177,11 @@ jobs:
 
           $outFile = Join-Path $env:RUNNER_TEMP 'encoding-probe.json'
           $probe = Join-Path $env:RUNNER_TEMP 'probe.ps1'
-          @'
-try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
-[ordered]@{ name = ('a' + [char]0x2022 + 'b') } | ConvertTo-Json -Compress
-'@ | Set-Content -LiteralPath $probe -Encoding UTF8
+          $probeLines = @(
+            'try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }'
+            "[ordered]@{ name = ('a' + [char]0x2022 + 'b') } | ConvertTo-Json -Compress"
+          )
+          Set-Content -LiteralPath $probe -Value $probeLines -Encoding UTF8
 
           cmd /c "chcp 437 >nul && powershell.exe -NoProfile -ExecutionPolicy Bypass -File ""$probe"" > ""$outFile"""
 
