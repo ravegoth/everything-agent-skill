@@ -121,7 +121,9 @@ def main() -> None:
 
     # This repository is public: refuse anything that leaks the authoring machine.
     private_patterns = {
-        "expanded user profile path": re.compile(r"[A-Za-z]:\\Users\\(?!name\b|<)[A-Za-z0-9._-]+", re.IGNORECASE),
+        "expanded user profile path": re.compile(r"[A-Za-z]:\\Users\\[A-Za-z0-9._-]+", re.IGNORECASE),
+        "expanded home path": re.compile(r"/(?:home|Users)/[A-Za-z0-9._-]+"),
+        "computer or account name": re.compile(r"\\\\[A-Za-z0-9._-]{2,}\\[A-Za-z0-9$._-]+"),
         # Valid octets only, and not part of a longer dotted token such as a version string.
         "IPv4 address": re.compile(
             r"(?<![-\w.])(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"

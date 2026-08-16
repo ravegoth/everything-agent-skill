@@ -30,12 +30,19 @@ $spec = if ($Component -eq 'Sdk') {
     }
 }
 
-if ((Test-Path -LiteralPath $spec.target) -and -not $Force) {
-    throw "Target already exists: $($spec.target). Use -Force to replace files."
+$targetExists = Test-Path -LiteralPath $spec.target
+if ($targetExists -and -not $Force) {
+    Write-Warning "$($spec.target) already exists. Re-run with -Force to replace it."
 }
 
+# Checked after ShouldProcess so that -WhatIf stays a side-effect-free preview
+# and never fails just because the backend is already installed.
 if (-not $PSCmdlet.ShouldProcess($spec.target, "Download and extract official Everything $Component from $($spec.url)")) {
     return
+}
+
+if ($targetExists -and -not $Force) {
+    throw "Target already exists: $($spec.target). Use -Force to replace files."
 }
 
 New-Item -ItemType Directory -Path $Destination -Force | Out-Null
@@ -43,7 +50,19 @@ $tempZip = Join-Path ([IO.Path]::GetTempPath()) ("everything-{0}.zip" -f [Guid]:
 $tempExtract = Join-Path ([IO.Path]::GetTempPath()) ("everything-{0}" -f [Guid]::NewGuid().ToString('N'))
 
 try {
-    Invoke-WebRequest -Uri $spec.url -OutFile $tempZip -UseBasicParsing
+    # Windows PowerShell 5.1 on older builds still negotiates TLS 1.0 by default.
+    try {
+        if ([Net.ServicePointManager]::SecurityProtocol -notmatch 'Tls12') {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        }
+    } catch { }
+
+    try {
+        Invoke-WebRequest -Uri $spec.url -OutFile $tempZip -UseBasicParsing
+    } catch {
+        throw "Could not download $($spec.url): $($_.Exception.Message). Check the connection, or download the official archive manually from https://www.voidtools.com/downloads/ and extract it to $($spec.target)."
+    }
+
     Expand-Archive -LiteralPath $tempZip -DestinationPath $tempExtract -Force
     New-Item -ItemType Directory -Path $spec.target -Force | Out-Null
     Copy-Item -Path (Join-Path $tempExtract '*') -Destination $spec.target -Recurse -Force

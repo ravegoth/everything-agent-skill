@@ -20,6 +20,7 @@ Use the bundled PowerShell scripts as the stable interface to Everything. Keep s
 4. Inspect the JSON response:
    - `everything.installed=false`: explain that the Everything application is required and point to `https://www.voidtools.com/downloads/`. Do not install software without approval.
    - `everything.running=false`: start the detected `Everything.exe` only when the user asked to search or approved starting it, then rerun detection.
+   - `everything.ipc=false` while running: Everything is up but its local IPC window is not reachable from this session. Queries will fail until Everything and the shell share one interactive desktop session.
    - `backend.ready=true`: continue.
    - `backend.ready=false`: read [backend-setup.md](references/backend-setup.md). Ask before downloading the official SDK or ES CLI.
 5. Translate the user's intent into Everything syntax. Read [search-syntax.md](references/search-syntax.md) for operators and examples.

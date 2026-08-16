@@ -32,7 +32,7 @@
 Find large videos on D:          D:\ ext:mp4;mkv;mov size:>2gb
 PowerShell edited today          ext:ps1 dm:today
 Exact project folder             folder:wholefilename:"project-name"
-PDFs under Downloads             path:"C:\Users\name\Downloads" ext:pdf
+PDFs in a folder with spaces     path:"D:\Design Assets" ext:pdf
 Recent installers                path:Downloads ext:exe;msi dm:thismonth
 Logs containing an error         ext:log content:"specific error"
 Exclude build dependencies       ext:js !path:node_modules !path:dist

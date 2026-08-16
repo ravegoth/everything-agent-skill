@@ -31,6 +31,7 @@ function Add-DirectoryCandidates {
     $expanded = [Environment]::ExpandEnvironmentVariables($Directory.Trim().Trim('"'))
     Add-CandidatePath $ExeList (Join-Path $expanded 'Everything.exe')
     Add-CandidatePath $ExeList (Join-Path $expanded 'Everything64.exe')
+    Add-CandidatePath $ExeList (Join-Path $expanded 'Everything32.exe')
     Add-CandidatePath $DllList (Join-Path $expanded 'Everything64.dll')
     Add-CandidatePath $DllList (Join-Path $expanded 'Everything32.dll')
     Add-CandidatePath $DllList (Join-Path $expanded 'EverythingARM64.dll')
@@ -38,10 +39,30 @@ function Add-DirectoryCandidates {
     Add-CandidatePath $EsList (Join-Path $expanded 'es.exe')
 }
 
+# Everything answers queries through a local IPC window. Looking for that window
+# detects installed, portable, and renamed instances alike, which a search for
+# known executable names cannot do.
+function Test-EverythingIpcWindow {
+    try {
+        $source = @'
+using System;
+using System.Runtime.InteropServices;
+public static class EverythingIpcProbe {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr FindWindowW(string className, string windowName);
+}
+'@
+        if (-not ('EverythingIpcProbe' -as [type])) { Add-Type -TypeDefinition $source }
+        return [EverythingIpcProbe]::FindWindowW('EVERYTHING_TASKBAR_NOTIFICATION', $null) -ne [IntPtr]::Zero
+    } catch {
+        return $false
+    }
+}
+
 if ($env:OS -ne 'Windows_NT') {
     $notWindows = [ordered]@{
         platform = [ordered]@{ windows = $false; architecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() }
-        everything = [ordered]@{ installed = $false; running = $false; executable = $null }
+        everything = [ordered]@{ installed = $false; running = $false; ipc = $false; executable = $null }
         backend = [ordered]@{ ready = $false; preferred = $null; dll = $null; es = $null }
         message = 'Everything Search is supported only on Windows.'
     }
@@ -54,26 +75,34 @@ $exeCandidates = [System.Collections.Generic.List[string]]::new()
 $dllCandidates = [System.Collections.Generic.List[string]]::new()
 $esCandidates = [System.Collections.Generic.List[string]]::new()
 
-foreach ($commandName in @('Everything.exe', 'Everything64.exe')) {
+foreach ($commandName in @('Everything.exe', 'Everything64.exe', 'Everything32.exe')) {
     $command = Get-Command $commandName -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($command) { Add-CandidatePath $exeCandidates $command.Source }
 }
 $esCommand = Get-Command 'es.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($esCommand) { Add-CandidatePath $esCandidates $esCommand.Source }
 
-foreach ($process in @(Get-Process -Name 'Everything', 'Everything64' -ErrorAction SilentlyContinue)) {
+foreach ($process in @(Get-Process -Name 'Everything', 'Everything64', 'Everything32' -ErrorAction SilentlyContinue)) {
     try { Add-CandidatePath $exeCandidates $process.Path } catch { }
 }
 
+$programRoots = @(
+    $env:ProgramFiles,
+    ${env:ProgramFiles(x86)},
+    $env:ProgramW6432,
+    $env:LOCALAPPDATA,
+    $env:APPDATA,
+    $env:ProgramData
+) | Where-Object { $_ } | Select-Object -Unique
+
 $standardDirs = @(
-    (Join-Path $env:ProgramFiles 'Everything'),
-    (Join-Path $env:ProgramFiles 'Everything 1.5a'),
-    $(if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} 'Everything' }),
-    $(if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} 'Everything 1.5a' }),
-    (Join-Path $env:LOCALAPPDATA 'Everything'),
-    (Join-Path $env:LOCALAPPDATA 'EverythingAgent\SDK\DLL'),
-    (Join-Path $env:LOCALAPPDATA 'EverythingAgent\CLI'),
-    $env:EVERYTHING_HOME,
+    foreach ($root in $programRoots) {
+        Join-Path $root 'Everything'
+        Join-Path $root 'Everything 1.5a'
+    }
+    (Join-Path $env:LOCALAPPDATA 'EverythingAgent\SDK\DLL')
+    (Join-Path $env:LOCALAPPDATA 'EverythingAgent\CLI')
+    $env:EVERYTHING_HOME
     $env:EVERYTHING_SDK
 ) | Where-Object { $_ }
 
@@ -109,6 +138,26 @@ foreach ($root in $registryRoots) {
     }
 }
 
+$appPathKeys = foreach ($hive in @('HKLM:\SOFTWARE', 'HKLM:\SOFTWARE\WOW6432Node', 'HKCU:\SOFTWARE')) {
+    foreach ($exeName in @('Everything.exe', 'Everything64.exe', 'Everything32.exe')) {
+        "$hive\Microsoft\Windows\CurrentVersion\App Paths\$exeName"
+    }
+}
+
+foreach ($appPathKey in $appPathKeys) {
+    $entry = Get-ItemProperty -LiteralPath $appPathKey -ErrorAction SilentlyContinue
+    if (-not $entry) { continue }
+    $registeredExe = $entry.'(default)'
+    if ($registeredExe) {
+        $registeredExe = $registeredExe.Trim().Trim('"')
+        Add-CandidatePath $exeCandidates $registeredExe
+        Add-DirectoryCandidates $exeCandidates $dllCandidates $esCandidates (Split-Path -Parent $registeredExe)
+    }
+    if ($entry.Path) {
+        Add-DirectoryCandidates $exeCandidates $dllCandidates $esCandidates $entry.Path
+    }
+}
+
 foreach ($exePath in @($exeCandidates)) {
     Add-DirectoryCandidates $exeCandidates $dllCandidates $esCandidates (Split-Path -Parent $exePath)
 }
@@ -124,7 +173,9 @@ $dll = @($dllCandidates | Where-Object { (Split-Path -Leaf $_) -eq $expectedDll 
 
 $exe = @($exeCandidates | Select-Object -First 1)[0]
 $es = @($esCandidates | Select-Object -First 1)[0]
-$running = @(Get-Process -Name 'Everything', 'Everything64' -ErrorAction SilentlyContinue).Count -gt 0
+$ipcAvailable = Test-EverythingIpcWindow
+$processRunning = @(Get-Process -Name 'Everything', 'Everything64', 'Everything32' -ErrorAction SilentlyContinue).Count -gt 0
+$running = [bool]($ipcAvailable -or $processRunning)
 $preferred = if ($dll) { 'dll' } elseif ($es) { 'es' } else { $null }
 
 $installed = [bool]($exe -or $running)
@@ -133,6 +184,8 @@ $message = if (-not $installed) {
     'Everything was not detected. Install the full application from voidtools.'
 } elseif (-not $running) {
     'Everything is installed but is not currently running.'
+} elseif (-not $ipcAvailable) {
+    'Everything is running, but its IPC window was not found. Run Everything and this shell in the same interactive user session; a service-only instance cannot answer queries.'
 } elseif (-not $preferred) {
     'Everything is running, but neither the SDK DLL nor es.exe was detected.'
 } else {
@@ -149,6 +202,7 @@ $result = [ordered]@{
     everything = [ordered]@{
         installed = $installed
         running = $running
+        ipc = $ipcAvailable
         executable = $exe
         candidates = @($exeCandidates)
     }

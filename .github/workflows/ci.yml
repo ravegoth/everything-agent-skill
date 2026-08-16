@@ -23,14 +23,21 @@ jobs:
           Get-ChildItem . -Filter '*.ps1' -Recurse | ForEach-Object {
             [void][scriptblock]::Create((Get-Content $_.FullName -Raw))
           }
+      # Run out of process with -File, which is how the skill documents invoking
+      # the script and the only form that preserves the script's exit code.
       - name: Detection reports non-Windows honestly
         shell: pwsh
         run: |
-          $json = & ./skills/everything-search/scripts/detect_everything.ps1
-          if ($LASTEXITCODE -ne 2) { throw "Expected exit code 2 off Windows, got $LASTEXITCODE." }
-          $status = $json | ConvertFrom-Json
+          $script = (Resolve-Path ./skills/everything-search/scripts/detect_everything.ps1).Path
+          $outFile = Join-Path ([IO.Path]::GetTempPath()) 'detect-non-windows.json'
+          $process = Start-Process -FilePath 'pwsh' -Wait -PassThru -NoNewWindow `
+            -ArgumentList @('-NoProfile', '-File', $script) -RedirectStandardOutput $outFile
+          if ($process.ExitCode -ne 2) { throw "Expected exit code 2 off Windows, got $($process.ExitCode)." }
+          $status = (Get-Content -LiteralPath $outFile -Raw) | ConvertFrom-Json
           if ($status.platform.windows) { throw 'Expected platform.windows to be false.' }
           if ($status.backend.ready) { throw 'Expected backend.ready to be false.' }
+          if ($status.everything.ipc) { throw 'Expected everything.ipc to be false.' }
+          exit 0
 
   powershell:
     runs-on: windows-latest
@@ -62,7 +69,9 @@ jobs:
           if ($null -eq $status.everything.installed) { throw 'Missing installed flag.' }
           if ($null -eq $status.backend.ready) { throw 'Missing backend ready flag.' }
           if ($status.everything.installed -isnot [bool]) { throw 'installed must be a boolean.' }
+          if ($status.everything.ipc -isnot [bool]) { throw 'everything.ipc must be a boolean.' }
           if ($status.backend.ready -isnot [bool]) { throw 'backend.ready must be a boolean.' }
+          exit 0
 
       # Regression: absent paths must serialize as JSON null, never as {}.
       # Select-Object -First 1 over an empty pipeline yields AutomationNull,
@@ -81,6 +90,7 @@ jobs:
           if ($null -ne $exe -and $exe -isnot [string]) {
             throw "everything.executable must be null or a string path, got $($exe.GetType().Name)."
           }
+          exit 0
 
       # Invoked out of process because the script reports failures on the real
       # stderr handle, which an in-process redirect does not capture.
@@ -130,6 +140,21 @@ jobs:
         run: |
           ./skills/everything-search/scripts/setup_backend.ps1 -Component Sdk -WhatIf
           ./skills/everything-search/scripts/setup_backend.ps1 -Component Es -WhatIf
+          exit 0
+
+      # Regression: -WhatIf must stay a preview even when the backend is already
+      # installed, which never happens on a fresh runner by default.
+      - name: Setup dry run is safe when the backend already exists
+        shell: powershell
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'EverythingAgentExisting'
+          New-Item -ItemType Directory -Path (Join-Path $target 'SDK') -Force | Out-Null
+          New-Item -ItemType Directory -Path (Join-Path $target 'CLI') -Force | Out-Null
+          ./skills/everything-search/scripts/setup_backend.ps1 -Component Sdk -Destination $target -WhatIf
+          ./skills/everything-search/scripts/setup_backend.ps1 -Component Es -Destination $target -WhatIf
+          $downloaded = @(Get-ChildItem -LiteralPath $target -Recurse -File)
+          if ($downloaded.Count -ne 0) { throw 'WhatIf must not download or write any file.' }
+          exit 0
 
       - name: Scripts run from a path containing spaces
         shell: powershell
@@ -140,6 +165,7 @@ jobs:
           $script = Join-Path $target 'skills\everything-search\scripts\detect_everything.ps1'
           $status = & $script | ConvertFrom-Json
           if (-not $status.platform.windows) { throw 'Detection failed from a path containing spaces.' }
+          exit 0
 
   skills-cli:
     runs-on: ubuntu-latest
