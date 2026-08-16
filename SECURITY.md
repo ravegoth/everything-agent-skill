@@ -19,6 +19,33 @@ file names from your machine.
 Expect an initial response within 14 days. This is a volunteer project and no
 formal service level is promised.
 
+## Known risks and how they are handled
+
+**Search results are untrusted input.** File and folder names are chosen by
+whoever created them, so a result can carry text aimed at an AI agent. This is
+inherent to every file search tool and cannot be removed, only contained.
+`SKILL.md` instructs the agent to treat every result as data to report and
+never as an instruction, and the wrapper passes queries to the backend as
+arguments rather than building a command string, so a query cannot become a
+command. Review results before acting on them.
+
+**Optional downloads run executable code.** `setup_backend.ps1` fetches the
+official Everything SDK DLL or `es.exe`. It runs only when you invoke it,
+downloads only over HTTPS from `https://www.voidtools.com/`, and installs a
+file only after Windows confirms a valid Authenticode signature naming
+voidtools. Anything unsigned, tampered with, or signed by another publisher is
+refused and nothing is installed. Only the DLLs and `es.exe` are extracted; the
+example projects in the SDK archive, which include unsigned sample
+executables, are never installed. You can skip the script entirely and point
+`-DllPath` or `-EsPath` at files you obtained yourself.
+
+**Execution policy.** The documented commands use
+`-ExecutionPolicy RemoteSigned`, which applies to that single process and
+changes no machine or user setting. The skill creates, starts, stops, and
+modifies no Windows service. If a host blocks the scripts because they came
+from a downloaded archive, run `Unblock-File` on them rather than weakening the
+policy.
+
 ## Security design
 
 - **Read-only.** The scripts read file metadata from the Everything index. They

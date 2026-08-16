@@ -9,7 +9,7 @@
       "name": "everything-search",
       "source": "./",
       "description": "Find local Windows files instantly through voidtools Everything.",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "category": "development",
       "keywords": ["everything", "windows", "search", "files"]
     }

@@ -17,16 +17,21 @@ if ($architecture -notin @('X64', 'X86', 'Arm64', 'Arm')) {
     throw "Unsupported Windows architecture: $architecture"
 }
 
+# Only the files the wrapper actually loads are installed. The official SDK
+# archive also ships example projects, including unsigned sample executables,
+# and none of that belongs in a backend directory.
 $spec = if ($Component -eq 'Sdk') {
     [ordered]@{
         url = 'https://www.voidtools.com/Everything-SDK.zip'
-        target = Join-Path $Destination 'SDK'
+        target = Join-Path $Destination 'SDK\DLL'
+        wanted = @('Everything32.dll', 'Everything64.dll', 'EverythingARM.dll', 'EverythingARM64.dll')
     }
 } else {
     $suffix = @{ X64 = 'x64'; X86 = 'x86'; Arm64 = 'ARM64'; Arm = 'ARM' }[$architecture]
     [ordered]@{
         url = "https://www.voidtools.com/ES-1.1.0.37.$suffix.zip"
         target = Join-Path $Destination 'CLI'
+        wanted = @('es.exe')
     }
 }
 
@@ -64,8 +69,31 @@ try {
     }
 
     Expand-Archive -LiteralPath $tempZip -DestinationPath $tempExtract -Force
+
+    # Nothing is installed until Windows confirms voidtools signed it. Unlike a
+    # checksum, this keeps working when voidtools publishes a new build.
+    $selected = @(Get-ChildItem -LiteralPath $tempExtract -Recurse -File |
+        Where-Object { $spec.wanted -contains $_.Name } |
+        Group-Object Name | ForEach-Object { $_.Group[0] })
+
+    if ($selected.Count -eq 0) {
+        throw "The archive from $($spec.url) contained none of: $($spec.wanted -join ', '). Nothing was installed."
+    }
+    foreach ($file in $selected) {
+        $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName
+        if ($signature.Status -ne 'Valid') {
+            throw "Refusing to install $($file.Name): Authenticode status is '$($signature.Status)'. Nothing was installed."
+        }
+        if ($signature.SignerCertificate.Subject -notmatch 'voidtools') {
+            throw "Refusing to install $($file.Name): signed by '$($signature.SignerCertificate.Subject)' rather than voidtools. Nothing was installed."
+        }
+    }
+
     New-Item -ItemType Directory -Path $spec.target -Force | Out-Null
-    Copy-Item -Path (Join-Path $tempExtract '*') -Destination $spec.target -Recurse -Force
+    foreach ($file in $selected) {
+        Copy-Item -LiteralPath $file.FullName -Destination $spec.target -Force
+    }
+    Write-Verbose "Installed $($selected.Count) voidtools-signed file(s) to $($spec.target)."
 } finally {
     Remove-Item -LiteralPath $tempZip -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $tempExtract -Recurse -Force -ErrorAction SilentlyContinue

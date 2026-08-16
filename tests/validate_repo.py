@@ -122,6 +122,20 @@ def main() -> None:
         if server_flag in powershell:
             raise AssertionError(f"Scripts must never enable a network server: {server_flag}")
 
+    setup = (SKILL / "scripts" / "setup_backend.ps1").read_text(encoding="utf-8")
+    if "Get-AuthenticodeSignature" not in setup or "voidtools" not in setup:
+        raise AssertionError("setup_backend.ps1 must verify the voidtools Authenticode signature before installing")
+
+    # Documented commands must not tell anyone to bypass execution policy.
+    docs = [ROOT / "README.md", SKILL / "SKILL.md"] + sorted((SKILL / "references").glob("*.md"))
+    for doc in docs:
+        if "ExecutionPolicy Bypass" in doc.read_text(encoding="utf-8"):
+            raise AssertionError(f"{doc.relative_to(ROOT).as_posix()} must not document -ExecutionPolicy Bypass")
+
+    skill_body = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+    if "untrusted" not in skill_body.lower():
+        raise AssertionError("SKILL.md must tell the agent to treat search results as untrusted data")
+
     tracked = sorted(
         path
         for path in ROOT.rglob("*")

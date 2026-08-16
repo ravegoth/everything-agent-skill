@@ -12,7 +12,7 @@ The skill does not bundle third-party binaries. It detects two official query ba
 Ask the user before downloading. Then run:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "<skill-dir>\scripts\setup_backend.ps1" -Component Sdk -Confirm
+powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File "<skill-dir>\scripts\setup_backend.ps1" -Component Sdk -Confirm
 ```
 
 The script downloads `https://www.voidtools.com/Everything-SDK.zip` and extracts it under `%LOCALAPPDATA%\EverythingAgent\SDK`. Detection checks this location automatically.
@@ -24,7 +24,7 @@ Use `-WhatIf` to show the planned destination without changing the machine.
 Ask the user before downloading. Then run:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "<skill-dir>\scripts\setup_backend.ps1" -Component Es -Confirm
+powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File "<skill-dir>\scripts\setup_backend.ps1" -Component Es -Confirm
 ```
 
 The script selects the official ES archive for the current Windows architecture and extracts it under `%LOCALAPPDATA%\EverythingAgent\CLI`.
