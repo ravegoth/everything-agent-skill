@@ -71,6 +71,9 @@ jobs:
           if ($status.everything.installed -isnot [bool]) { throw 'installed must be a boolean.' }
           if ($status.everything.ipc -isnot [bool]) { throw 'everything.ipc must be a boolean.' }
           if ($status.backend.ready -isnot [bool]) { throw 'backend.ready must be a boolean.' }
+          if (-not $status.everything.ipc -and $status.backend.ready) {
+            throw 'backend.ready must never be true while everything.ipc is false.'
+          }
           exit 0
 
       # Regression: absent paths must serialize as JSON null, never as {}.
@@ -192,6 +195,62 @@ jobs:
           if ((ConvertFrom-Json $decoded).name -ne ('a' + [char]0x2022 + 'b')) {
             throw "U+2022 did not survive the round trip: $decoded"
           }
+          exit 0
+
+      # Regression: Everything can be running while its IPC window belongs to
+      # another desktop session. Both backends reach Everything through that
+      # window, so this state must report not ready and must be rejected
+      # before a backend is selected.
+      - name: Running without reachable IPC is not ready
+        shell: powershell
+        run: |
+          $detect = (Resolve-Path ./skills/everything-search/scripts/detect_everything.ps1).Path
+          $search = (Resolve-Path ./skills/everything-search/scripts/search_everything.ps1).Path
+
+          function Get-FunctionText {
+            param([string]$Path, [string]$Name)
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$null, [ref]$null)
+            $found = $ast.FindAll({
+              $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+              $args[0].Name -eq $Name
+            }, $true)
+            if (-not $found) { throw "$Name was not found in $Path." }
+            return $found[0].Extent.Text
+          }
+
+          . ([scriptblock]::Create((Get-FunctionText -Path $detect -Name 'Test-BackendReady')))
+          . ([scriptblock]::Create((Get-FunctionText -Path $search -Name 'Get-BackendBlockReason')))
+
+          # Readiness requires a reachable IPC window, not merely a process.
+          if (Test-BackendReady -IpcAvailable $false -Preferred 'dll') {
+            throw 'backend.ready must be false when the IPC window is unreachable, even with a DLL present.'
+          }
+          if (Test-BackendReady -IpcAvailable $false -Preferred 'es') {
+            throw 'backend.ready must be false when the IPC window is unreachable, even with es.exe present.'
+          }
+          if (Test-BackendReady -IpcAvailable $true -Preferred $null) {
+            throw 'backend.ready must be false when no backend was detected.'
+          }
+          if (-not (Test-BackendReady -IpcAvailable $true -Preferred 'dll')) {
+            throw 'backend.ready must be true when IPC is reachable and a backend exists.'
+          }
+
+          # Searching must refuse the same state before selecting a backend.
+          $runningNoIpc = [pscustomobject]@{
+            platform   = [pscustomobject]@{ windows = $true }
+            everything = [pscustomobject]@{ installed = $true; running = $true; ipc = $false }
+            message    = 'detection message'
+          }
+          $reason = Get-BackendBlockReason -Detected $runningNoIpc
+          if (-not $reason) { throw 'A running instance with no reachable IPC window must be rejected.' }
+          if ($reason -notmatch 'IPC') { throw "The rejection must explain the IPC problem, got: $reason" }
+
+          $healthy = [pscustomobject]@{
+            platform   = [pscustomobject]@{ windows = $true }
+            everything = [pscustomobject]@{ installed = $true; running = $true; ipc = $true }
+            message    = 'detection message'
+          }
+          if (Get-BackendBlockReason -Detected $healthy) { throw 'A healthy backend must not be blocked.' }
           exit 0
 
       - name: Test setup dry run

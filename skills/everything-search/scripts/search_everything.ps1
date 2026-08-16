@@ -113,6 +113,23 @@ function Split-EsQueryTerm {
     return $terms
 }
 
+# Returns the reason a query cannot run, or $null when the backend is usable.
+# Both backends reach Everything through the same local IPC window, so a
+# running process with no reachable IPC window must be rejected before a
+# backend is selected rather than failing later inside the query.
+function Get-BackendBlockReason {
+    param([Parameter(Mandatory)]$Detected)
+
+    if (-not $Detected.platform.windows) { return $Detected.message }
+    if (-not $Detected.everything.installed) { return $Detected.message }
+    if (-not $Detected.everything.running) { return $Detected.message }
+    if (-not $Detected.everything.ipc) {
+        return 'Everything is running, but its local IPC window is not reachable from this session, so no query can be answered. Run Everything and this shell as the same user on the same interactive desktop, then retry. A service-only instance cannot answer queries.'
+    }
+
+    return $null
+}
+
 function Invoke-EsSearch {
     param([string]$Executable, [string]$SearchText, [int]$Limit)
 
@@ -268,9 +285,8 @@ public static class EverythingSdk {
 
 try {
     $detected = & $detectScript -AsObject
-    if (-not $detected.platform.windows) { throw $detected.message }
-    if (-not $detected.everything.installed) { throw $detected.message }
-    if (-not $detected.everything.running) { throw $detected.message }
+    $blockReason = Get-BackendBlockReason -Detected $detected
+    if ($blockReason) { throw $blockReason }
 
     if (-not $DllPath) { $DllPath = $detected.backend.dll }
     if (-not $EsPath) { $EsPath = $detected.backend.es }

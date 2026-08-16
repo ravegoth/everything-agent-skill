@@ -63,6 +63,18 @@ public static class EverythingIpcProbe {
     }
 }
 
+# A backend is only ready when the IPC window is actually reachable. A running
+# process is not enough: Everything can be up while its IPC window belongs to
+# another desktop session, and every query would then fail.
+function Test-BackendReady {
+    param(
+        [AllowNull()][bool]$IpcAvailable,
+        [AllowNull()][string]$Preferred
+    )
+
+    return [bool]($IpcAvailable -and $Preferred)
+}
+
 if ($env:OS -ne 'Windows_NT') {
     $notWindows = [ordered]@{
         platform = [ordered]@{ windows = $false; architecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() }
@@ -211,7 +223,7 @@ $result = [ordered]@{
         candidates = @($exeCandidates)
     }
     backend = [ordered]@{
-        ready = [bool]($running -and $preferred)
+        ready = Test-BackendReady -IpcAvailable $ipcAvailable -Preferred $preferred
         preferred = $preferred
         dll = $dll
         dll_candidates = @($dllCandidates)
